@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+backend/output/
+backend/data/temp_signatures/*
+!backend/data/temp_signatures/.gitkeep
+
+# Reference/source material kept locally only -- not needed to run the app,
+# and some of these files exceed GitHub's 100MB per-file limit.
+/*.pdf
+/Blank Templates/
+/Example Templates/
+
+# Secrets -- password hash + HMAC token secret, must not go into a shared repo.
+backend/data/auth_config.json
+
+# Leftover local test artifacts, not part of the app.
+backend/.loadtest_progress.json
+backend/*.log
+frontend/*.log
+backend/data/signatures/*
+!backend/data/signatures/.gitkeep

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QuickProp — Signatures</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23EA3323'/%3E%3Ctext x='50' y='71' font-family='Arial, sans-serif' font-size='60' font-weight='800' fill='white' text-anchor='middle'%3EQ%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #EA3323;
+    --accent-dark: #C61F11;
+    --accent-tint: #FDEDEB;
+    --ink: #18181B;
+    --ink-soft: #3F3F46;
+    --muted: #71717A;
+    --border: #E4E4E7;
+    --surface: #FFFFFF;
+    --surface-alt: #FAFAFA;
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", -apple-system, "Segoe UI", sans-serif; margin: 0; background: linear-gradient(180deg, #F7F7F8 0%, var(--surface-alt) 220px); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  header.site-header {
+    background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 32px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 1px 2px rgba(15, 15, 15, 0.03);
+    position: relative;
+  }
+  header.site-header::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-tint) 40%, transparent 60%);
+  }
+  header.site-header img.logo { height: 32px; }
+  header.site-header .divider { width: 1px; height: 24px; background: var(--border); }
+  header.site-header .product-name { font-weight: 800; font-size: 1.08rem; letter-spacing: -0.02em; }
+  header.site-header .tagline { font-size: 0.76rem; color: var(--muted); font-weight: 500; }
+  main { max-width: 660px; margin: 0 auto; padding: 40px 24px 80px; line-height: 1.5; }
+  h1 {
+    font-size: 1.2rem; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.015em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h1::before { content: ""; display: inline-block; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .hint { color: var(--muted); font-size: 0.88rem; margin-bottom: 24px; padding-left: 14px; }
+  .company-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(15, 15, 15, 0.04); }
+  .company-name { font-weight: 700; margin-bottom: 12px; font-size: 0.95rem; color: var(--ink-soft); }
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 8px; padding: 22px; text-align: center;
+    color: var(--muted); font-size: 0.88rem; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone.dragover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-dark); }
+  .dropzone img { max-width: 220px; max-height: 90px; display: block; margin: 0 auto 8px; }
+  .status { font-size: 0.8rem; margin-top: 8px; }
+  .status.ok { color: #1a7a3a; }
+  .status.err { color: var(--accent-dark); }
+  input[type="file"] { display: none; }
+
+  #login-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 0%, #FBFBFC 0%, var(--surface-alt) 60%);
+  }
+  #login-screen .login-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 40px 34px; width: 100%; max-width: 340px; text-align: center;
+    box-shadow: 0 8px 28px rgba(15, 15, 15, 0.06);
+  }
+  #login-screen img.logo { height: 34px; margin-bottom: 16px; }
+  #login-screen h1 { font-size: 1.1rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  #login-screen p { color: var(--muted); font-size: 0.85rem; margin: 0 0 22px; }
+  #login-screen input {
+    width: 100%; padding: 11px 12px; border: 1.5px solid var(--border); border-radius: var(--radius);
+    font-family: inherit; font-size: 0.95rem; margin-bottom: 14px; box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  #login-screen input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  #login-screen button {
+    width: 100%; padding: 11px 12px; border: none; border-radius: var(--radius);
+    background: var(--accent); color: white; font-weight: 700; font-family: inherit;
+    font-size: 0.95rem; cursor: pointer; box-shadow: 0 1px 2px rgba(198, 31, 17, 0.15);
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  #login-screen button:hover { background: var(--accent-dark); box-shadow: 0 2px 6px rgba(198, 31, 17, 0.25); }
+  #login-screen .login-error { color: var(--accent-dark); font-size: 0.82rem; margin-bottom: 10px; min-height: 1em; }
+  #app-root { display: none; }
+
+  @media (max-width: 600px) {
+    header.site-header { padding: 12px 16px; }
+    header.site-header img.logo { height: 26px; }
+    main { padding: 20px 12px 60px; }
+    .company-block { padding: 14px; }
+    #login-screen .login-card { padding: 28px 20px; max-width: 92%; }
+  }
+</style>
+</head>
+<body>
+  <div id="login-screen">
+    <div class="login-card">
+      <img class="logo" src="https://sybrid.com/assets/img/logo.png" alt="Sybrid" />
+      <h1>QuickProp</h1>
+      <p>Enter the organization password to continue.</p>
+      <div class="login-error" id="login-error"></div>
+      <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
+      <button type="button" id="login-btn">Unlock</button>
+    </div>
+  </div>
+
+  <div id="app-root">
+  <header class="site-header">
+    <img class="logo" src="https://sybrid.com/assets/img/logo.png" alt="Sybrid" />
+    <div class="divider"></div>
+    <div>
+      <div class="product-name">QuickProp</div>
+      <div class="tagline">Company signatures</div>
+    </div>
+  </header>
+  <main>
+  <h1>Company Signatures</h1>
+  <p class="hint">Drag a signature image (or click to browse) onto a brand below. It gets applied automatically to every proposal generated for that brand from now on.</p>
+  <div id="list"></div>
+  </main>
+  </div>
+
+  <script>
+    const API = location.port === "5500" ? "http://127.0.0.1:8010" : "";
+
+    function getToken() { return localStorage.getItem("quickprop_token"); }
+    function setToken(t) { localStorage.setItem("quickprop_token", t); }
+    function clearToken() { localStorage.removeItem("quickprop_token"); }
+
+    async function authedFetch(url, options = {}) {
+      const headers = { ...(options.headers || {}), Authorization: `Bearer ${getToken()}` };
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        clearToken();
+        showLogin("Your session expired — please enter the password again.");
+        throw new Error("unauthenticated");
+      }
+      return res;
+    }
+
+    function showLogin(errorMsg) {
+      document.getElementById("login-screen").style.display = "flex";
+      document.getElementById("app-root").style.display = "none";
+      document.getElementById("login-error").textContent = errorMsg || "";
+    }
+
+    function showApp() {
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("app-root").style.display = "block";
+      loadCompanies();
+    }
+
+    async function attemptLogin() {
+      const pwInput = document.getElementById("login-password");
+      const password = pwInput.value;
+      const errorEl = document.getElementById("login-error");
+      errorEl.textContent = "";
+      if (!password) return;
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }),
+        });
+        if (!res.ok) { errorEl.textContent = "Incorrect password."; return; }
+        const data = await res.json();
+        setToken(data.token);
+        pwInput.value = "";
+        showApp();
+      } catch (e) {
+        errorEl.textContent = "Couldn't reach the server. Try again.";
+      }
+    }
+
+    document.getElementById("login-btn").onclick = attemptLogin;
+    document.getElementById("login-password").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") attemptLogin();
+    });
+
+    async function upload(companyId, file, statusEl) {
+      const form = new FormData();
+      form.append("file", file);
+      statusEl.textContent = "Uploading...";
+      statusEl.className = "status";
+      try {
+        const res = await authedFetch(`${API}/companies/${companyId}/signature`, { method: "POST", body: form });
+        if (!res.ok) throw new Error("upload failed");
+        statusEl.textContent = "Saved — will be used on this brand's next proposal.";
+        statusEl.className = "status ok";
+      } catch (e) {
+        statusEl.textContent = "Upload failed. Try again.";
+        statusEl.className = "status err";
+      }
+    }
+
+    async function loadCompanies() {
+      const res = await authedFetch(`${API}/companies`);
+      const companies = await res.json();
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      companies.forEach(c => {
+        const block = document.createElement("div");
+        block.className = "company-block";
+
+        const name = document.createElement("div");
+        name.className = "company-name";
+        name.textContent = c.name + (c.has_signature ? " ✓ signature on file" : "");
+        block.appendChild(name);
+
+        const zone = document.createElement("div");
+        zone.className = "dropzone";
+        zone.textContent = "Drag signature image here, or click to browse";
+        block.appendChild(zone);
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/png,image/jpeg";
+        block.appendChild(fileInput);
+
+        const status = document.createElement("div");
+        status.className = "status";
+        block.appendChild(status);
+
+        zone.onclick = () => fileInput.click();
+        fileInput.onchange = () => {
+          if (fileInput.files[0]) upload(c.id, fileInput.files[0], status);
+        };
+
+        zone.ondragover = (e) => { e.preventDefault(); zone.classList.add("dragover"); };
+        zone.ondragleave = () => zone.classList.remove("dragover");
+        zone.ondrop = (e) => {
+          e.preventDefault();
+          zone.classList.remove("dragover");
+          const file = e.dataTransfer.files[0];
+          if (file) upload(c.id, file, status);
+        };
+
+        list.appendChild(block);
+      });
+    }
+
+    if (getToken()) {
+      showApp();
+    } else {
+      showLogin();
+    }
+  </script>
+</body>
+</html>

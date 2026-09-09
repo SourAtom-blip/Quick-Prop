@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-pptx
+python-docx
+python-multipart
+Pillow
+reportlab
+vercel

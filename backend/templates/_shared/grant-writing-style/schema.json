@@ -1,0 +1,58 @@
+{
+  "template_id": "grant-writing-inc.proposal",
+  "label": "Grant Proposal",
+  "source_file": "template.pptx",
+  "fields": [
+    { "key": "client_name", "label": "Client Name", "type": "text",
+      "targets": [
+        {"slide": 1, "shape": "TextBox 6", "paragraph": 0, "run": 0, "prefix": "Prepared for: "},
+        {"slide": 3, "shape": "ToLine", "paragraph": 0, "run": 0, "prefix": "To: "}
+      ]
+    },
+    { "key": "section1_heading", "label": "Section 1 - Heading", "type": "text" },
+    { "key": "section1_body", "label": "Section 1 - Body Text", "type": "paragraph" },
+    { "key": "section2_heading", "label": "Section 2 - Heading (optional)", "type": "text", "removable": true },
+    { "key": "section2_body", "label": "Section 2 - Body Text (optional)", "type": "paragraph", "removable": true },
+    { "key": "client_contact_date", "label": "Client Sign Date", "type": "text",
+      "targets": [{"slide": 3, "shape": "ClientBlock", "paragraph": 1, "run": 0, "prefix": "Date: "}] },
+    { "key": "client_contact_phone", "label": "Client Phone", "type": "text",
+      "targets": [{"slide": 3, "shape": "ClientBlock", "paragraph": 2, "run": 0, "prefix": "Phone: "}] },
+    { "key": "client_contact_email", "label": "Client Email", "type": "text",
+      "targets": [{"slide": 3, "shape": "ClientBlock", "paragraph": 3, "run": 0, "prefix": "Email: "}] },
+    { "key": "client_signee_name", "label": "Client Signee Name", "type": "text",
+      "targets": [{"slide": 3, "shape": "ClientBlock", "paragraph": 0, "run": 0, "prefix": "Name: "}] }
+  ],
+  "content_flow": {
+    "first_slide": 2,
+    "remove_slides": [],
+    "strip_shapes": ["TextBox 5", "TextBox 6"],
+    "style_reference": {"heading_shape": "TextBox 5", "body_shape": "TextBox 6"},
+    "left_in": 0.62,
+    "width_in": 7.0,
+    "top_start_in": 1.8,
+    "bottom_limit_in": 10.6,
+    "gap_in": 0.3,
+    "core_blocks": [
+      {"heading_key": "section1_heading", "body_key": "section1_body"},
+      {"heading_key": "section2_heading", "body_key": "section2_body"}
+    ],
+    "extra_sections_key": "extra_sections",
+    "tables": [
+      {"key": "pricing_rows", "label": "Pricing", "columns": ["Item", "Price"]}
+    ]
+  },
+  "section_group": {
+    "key": "extra_sections",
+    "label": "Additional Sections",
+    "item_fields": ["heading", "body"]
+  },
+  "rep_signature_slot": {"slide": 3, "left_in": 0.62, "top_in": 5.0, "width_in": 2.0, "height_in": 0.45},
+  "client_signature_slot": {"slide": 3, "left_in": 4.2, "top_in": 5.0, "width_in": 2.0, "height_in": 0.45},
+  "branding_targets": {
+    "company_name": [{"slide": 3, "shape": "ByLine", "paragraph": 0, "run": 0, "prefix": "By: "}],
+    "rep_name": [{"slide": 3, "shape": "RepBlock", "paragraph": 0, "run": 0, "prefix": "Name: "}],
+    "rep_date": [{"slide": 3, "shape": "RepBlock", "paragraph": 1, "run": 0, "prefix": "Date: "}],
+    "rep_phone": [{"slide": 3, "shape": "RepBlock", "paragraph": 2, "run": 0, "prefix": "Phone: "}],
+    "rep_email": [{"slide": 3, "shape": "RepBlock", "paragraph": 3, "run": 0, "prefix": "Email: "}]
+  }
+}

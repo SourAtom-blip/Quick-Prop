@@ -1,0 +1,42 @@
+{
+  "template_id": "web-app-dev.nda",
+  "label": "Non-Disclosure Agreement",
+  "source_file": "template.pptx",
+  "fields": [
+    { "key": "client_name", "label": "Client Name", "type": "text",
+      "targets": [
+        {"slide": 1, "shape": "object 11", "paragraph": 0, "run": 0},
+        {"slide": 2, "shape": "TextBox 5", "paragraph": 0, "run": 0},
+        {"slide": 4, "shape": "TextBox 5", "paragraph": 0, "run": 3, "prefix": "“", "suffix": "” "},
+        {"slide": 7, "shape": "TextBox 5", "paragraph": 1, "run": 2, "suffix": " "},
+        {"slide": 7, "shape": "TextBox 7", "paragraph": 0, "run": 0, "prefix": "Name: "},
+        {"slide": 7, "shape": "TextBox 3", "paragraph": 0, "run": 1, "prefix": " ", "suffix": " "}
+      ]
+    },
+    { "key": "agreement_date", "label": "Agreement Date", "type": "text",
+      "targets": [{"slide": 4, "shape": "TextBox 5", "paragraph": 0, "run": 1, "prefix": "[", "suffix": "] "}] },
+    { "key": "project_summary", "label": "Project Summary", "type": "paragraph",
+      "targets": [{"slide": 3, "shape": "TextBox 20", "paragraph": 0, "run": 0}] },
+    { "key": "client_contact_date", "label": "Client Sign Date", "type": "text",
+      "targets": [{"slide": 7, "shape": "TextBox 7", "paragraph": 1, "run": 0, "prefix": "Date: "}] },
+    { "key": "client_contact_phone", "label": "Client Phone", "type": "text",
+      "targets": [{"slide": 7, "shape": "TextBox 7", "paragraph": 2, "run": 0, "prefix": "Phone: "}] },
+    { "key": "client_contact_email", "label": "Client Email", "type": "text",
+      "targets": [{"slide": 7, "shape": "TextBox 7", "paragraph": 3, "run": 0, "prefix": "Email: "}] }
+  ],
+  "branding_targets": {
+    "company_name": [
+      {"slide": 4, "shape": "TextBox 5", "paragraph": 1, "run": 0, "prefix": "“", "suffix": "” "},
+      {"slide": 7, "shape": "TextBox 5", "paragraph": 1, "run": 0, "suffix": " "}
+    ],
+    "rep_name": [{"slide": 7, "shape": "TextBox 6", "paragraph": 0, "run": 0, "prefix": "Name: "}],
+    "rep_date": [{"slide": 7, "shape": "TextBox 6", "paragraph": 1, "run": 0, "prefix": "Date: "}],
+    "rep_phone": [{"slide": 7, "shape": "TextBox 6", "paragraph": 2, "run": 0, "prefix": "Phone: "}],
+    "rep_email": [{"slide": 7, "shape": "TextBox 6", "paragraph": 3, "run": 0, "prefix": "Email: "}]
+  },
+  "standalone_table": {
+    "key": "pricing_rows", "label": "Pricing", "columns": ["Item", "Price"],
+    "insert_blank_after_slide": 6, "layout_index": 6,
+    "left_in": 0.6, "top_in": 1.6, "width_in": 7.0
+  }
+}

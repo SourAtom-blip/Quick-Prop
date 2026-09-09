@@ -1,0 +1,47 @@
+{
+  "cali-web-studios": {
+    "name": "Cali Web Studios",
+    "style": "grid-style",
+    "rep_name": "Brian McGregor",
+    "rep_date": "",
+    "rep_phone": "(209) 209-4386",
+    "rep_email": "info@caliwebstudios.com",
+    "services": ["custom-website", "web-app", "mobile-app", "seo", "smm", "hosting-servers", "orm"]
+  },
+  "american-web-builders": {
+    "name": "American Web Builders",
+    "style": "letter-style",
+    "rep_name": "Brian McGregor",
+    "rep_date": "",
+    "rep_phone": "",
+    "rep_email": "",
+    "services": ["custom-website", "web-app", "mobile-app", "seo", "smm", "hosting-servers", "orm"]
+  },
+  "progressive-ux": {
+    "name": "Progressive UX",
+    "style": "progressive-ux-agreement",
+    "rep_name": "Brian McGregor",
+    "rep_date": "",
+    "rep_phone": "",
+    "rep_email": "",
+    "services": ["custom-website", "web-app", "mobile-app", "seo", "smm", "hosting-servers", "orm"]
+  },
+  "web-app-dev": {
+    "name": "Web App Dev",
+    "style": "nda-style",
+    "rep_name": "Brian McGregor",
+    "rep_date": "",
+    "rep_phone": "",
+    "rep_email": "",
+    "services": ["custom-website", "web-app", "mobile-app", "seo", "smm", "hosting-servers", "orm"]
+  },
+  "grant-writing-inc": {
+    "name": "Grant Writing Inc",
+    "style": "grant-writing-style",
+    "rep_name": "",
+    "rep_date": "",
+    "rep_phone": "",
+    "rep_email": "",
+    "services": ["custom-website", "web-app", "mobile-app", "seo", "smm", "hosting-servers", "orm"]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "template_id": "american-web-builders.custom-website.style-a",
+  "label": "Website Proposal (Letter Style)",
+  "source_file": "template.pptx",
+  "badge_colors": ["B81D3A", "14143C"],
+  "remove_paragraphs": [
+    { "slide": 5, "shape": "TextBox 5", "paragraphs": [0, 1, 2] }
+  ],
+  "fields": [
+    { "key": "client_name", "label": "Client Name", "type": "text",
+      "targets": [
+        {"slide": 2, "shape": "TextBox 5", "paragraph": 0, "run": 0},
+        {"slide": 5, "shape": "TextBox 6", "paragraph": 0, "run": 0, "prefix": "Name: "}
+      ]
+    },
+    { "key": "intro_body", "label": "Opening Paragraph (Dear ...)", "type": "paragraph",
+      "targets": [{"slide": 3, "shape": "TextBox 3", "paragraph": 1, "run": "all"}] },
+    { "key": "package_details", "label": "Package Details", "type": "paragraph" },
+    { "key": "closing_message", "label": "Closing Message", "type": "paragraph" },
+    { "key": "client_contact_date", "label": "Client Sign Date", "type": "text",
+      "targets": [{"slide": 5, "shape": "TextBox 8", "paragraph": 0, "run": 0, "prefix": "Date:"}] }
+  ],
+  "content_flow": {
+    "first_slide": 4,
+    "remove_slides": [],
+    "strip_shapes": ["TextBox 5"],
+    "style_reference": {"heading_shape": "TextBox 5", "heading_paragraph": 0, "body_shape": "TextBox 5", "body_paragraph": 2, "heading_size_override_pt": 16},
+    "left_in": 0.62,
+    "width_in": 6.76,
+    "top_start_in": 1.6,
+    "bottom_limit_in": 9.2,
+    "gap_in": 0.3,
+    "core_blocks": [
+      {"fixed_heading": "Package Details", "body_key": "package_details"},
+      {"body_key": "closing_message"}
+    ],
+    "extra_sections_key": "extra_sections",
+    "tables": [
+      {"key": "pricing_rows", "label": "Pricing", "columns": ["Item", "Price"]}
+    ]
+  },
+  "section_group": {"key": "extra_sections", "label": "Additional Sections", "item_fields": ["heading", "body"]},
+  "branding_targets": {
+    "rep_name": [
+      {"slide": 5, "shape": "TextBox 3", "paragraph": 0, "run": 0, "prefix": "Name: "},
+      {"slide": 5, "shape": "TextBox 5", "paragraph": 1, "run": 0}
+    ],
+    "rep_date": [{"slide": 5, "shape": "TextBox 7", "paragraph": 0, "run": 0, "prefix": "Date:"}]
+  }
+}

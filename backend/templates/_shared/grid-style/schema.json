@@ -1,0 +1,237 @@
+{
+  "template_id": "canvas-digital.web-development.style-a",
+  "label": "Website Proposal (Grid Style)",
+  "source_file": "style-a.pptx",
+  "fields": [
+    {
+      "key": "client_name",
+      "label": "Client Name",
+      "type": "text",
+      "targets": [
+        {
+          "slide": 2,
+          "shape": "TextBox 5",
+          "paragraph": 0,
+          "run": 0
+        },
+        {
+          "slide": 5,
+          "shape": "TextBox 5",
+          "paragraph": 1,
+          "run": 2,
+          "suffix": ""
+        },
+        {
+          "slide": 5,
+          "shape": "TextBox 7",
+          "paragraph": 0,
+          "run": 0,
+          "prefix": "Name: "
+        },
+        {
+          "slide": 5,
+          "shape": "TextBox 8",
+          "paragraph": 0,
+          "run": 0,
+          "prefix": "To: "
+        }
+      ]
+    },
+    {
+      "key": "section1_heading",
+      "label": "Section 1 - Heading",
+      "type": "text"
+    },
+    {
+      "key": "section1_body",
+      "label": "Section 1 - Body Text",
+      "type": "paragraph"
+    },
+    {
+      "key": "section2_heading",
+      "label": "Section 2 - Heading (optional)",
+      "type": "text",
+      "removable": true
+    },
+    {
+      "key": "section2_body",
+      "label": "Section 2 - Body Text (optional)",
+      "type": "paragraph",
+      "removable": true
+    },
+    {
+      "key": "section3_heading",
+      "label": "Section 3 - Heading (optional)",
+      "type": "text",
+      "removable": true
+    },
+    {
+      "key": "section3_body",
+      "label": "Section 3 - Body Text (optional)",
+      "type": "paragraph",
+      "removable": true
+    },
+    {
+      "key": "client_contact_date",
+      "label": "Client Sign Date",
+      "type": "text",
+      "targets": [
+        {
+          "slide": 5,
+          "shape": "TextBox 7",
+          "paragraph": 1,
+          "run": 0,
+          "prefix": "Date: "
+        }
+      ]
+    },
+    {
+      "key": "client_contact_phone",
+      "label": "Client Phone",
+      "type": "text",
+      "targets": [
+        {
+          "slide": 5,
+          "shape": "TextBox 7",
+          "paragraph": 2,
+          "run": 0,
+          "prefix": "Phone: "
+        }
+      ]
+    },
+    {
+      "key": "client_contact_email",
+      "label": "Client Email",
+      "type": "text",
+      "targets": [
+        {
+          "slide": 5,
+          "shape": "TextBox 7",
+          "paragraph": 3,
+          "run": 0,
+          "prefix": "Email: "
+        }
+      ]
+    }
+  ],
+  "content_flow": {
+    "first_slide": 3,
+    "clone_base_slide": 3,
+    "remove_slides": [
+      4
+    ],
+    "strip_shapes": [
+      "TextBox 5",
+      "TextBox 6"
+    ],
+    "style_reference": {
+      "heading_shape": "TextBox 5",
+      "body_shape": "TextBox 6"
+    },
+    "left_in": 0.62,
+    "width_in": 7.14,
+    "top_start_in": 1.6,
+    "bottom_limit_in": 10.6,
+    "gap_in": 0.3,
+    "core_blocks": [
+      {
+        "heading_key": "section1_heading",
+        "body_key": "section1_body"
+      },
+      {
+        "heading_key": "section2_heading",
+        "body_key": "section2_body"
+      },
+      {
+        "heading_key": "section3_heading",
+        "body_key": "section3_body"
+      }
+    ],
+    "extra_sections_key": "extra_sections",
+    "tables": [
+      {
+        "key": "pricing_rows",
+        "label": "Pricing",
+        "columns": [
+          "Item",
+          "Price"
+        ]
+      }
+    ]
+  },
+  "section_group": {
+    "key": "extra_sections",
+    "label": "Additional Sections",
+    "item_fields": [
+      "heading",
+      "body"
+    ]
+  },
+  "rep_signature_slot": {
+    "slide": 5,
+    "left_in": 0.5,
+    "top_in": 4.78,
+    "width_in": 2.3,
+    "height_in": 0.32
+  },
+  "client_signature_slot": {
+    "slide": 5,
+    "left_in": 4.22,
+    "top_in": 4.78,
+    "width_in": 2.3,
+    "height_in": 0.32
+  },
+  "branding_targets": {
+    "company_name": [
+      {
+        "slide": 5,
+        "shape": "TextBox 5",
+        "paragraph": 1,
+        "run": 0
+      },
+      {
+        "slide": 5,
+        "shape": "TextBox 3",
+        "paragraph": 0,
+        "run": 0,
+        "prefix": "By: "
+      }
+    ],
+    "rep_name": [
+      {
+        "slide": 5,
+        "shape": "TextBox 6",
+        "paragraph": 0,
+        "run": 0,
+        "prefix": "Name: "
+      }
+    ],
+    "rep_date": [
+      {
+        "slide": 5,
+        "shape": "TextBox 6",
+        "paragraph": 1,
+        "run": 0,
+        "prefix": "Date: "
+      }
+    ],
+    "rep_phone": [
+      {
+        "slide": 5,
+        "shape": "TextBox 6",
+        "paragraph": 2,
+        "run": 0,
+        "prefix": "Phone: "
+      }
+    ],
+    "rep_email": [
+      {
+        "slide": 5,
+        "shape": "TextBox 6",
+        "paragraph": 3,
+        "run": 0,
+        "prefix": "Email: "
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "template_id": "progressive-ux.mobile-app-agreement",
+  "label": "Mobile App Development Agreement",
+  "source_file": "template.pptx",
+  "find_replace_fields": [
+    { "key": "client_name", "label": "Client Company Name", "type": "text",
+      "finds": ["AlanPro Technologies"] },
+    { "key": "client_signee_name", "label": "Client Signee Name", "type": "text",
+      "finds": ["Kenneth Simpson"] },
+    { "key": "agreement_date", "label": "Agreement Date", "type": "text",
+      "finds": ["12/16/2025"] },
+    { "key": "scope_of_work", "label": "Scope of Work", "type": "paragraph",
+      "finds": ["Edit Here…….."] }
+  ],
+  "branding_find_replace": {
+    "company_name": ["Progressive UX Inc.", "Progressive UX"],
+    "rep_name": ["Brian McGregor"]
+  },
+  "standalone_table": {
+    "key": "pricing_rows", "label": "Pricing", "columns": ["Item", "Price"],
+    "insert_blank_after_slide": 4, "layout_index": 4,
+    "left_in": 0.6, "top_in": 1.6, "width_in": 7.0
+  }
+}
