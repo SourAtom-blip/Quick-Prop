@@ -27,10 +27,11 @@ SHARED_DIR = TEMPLATES_DIR / "_shared"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SIGNATURES_DIR = DATA_DIR / "signatures"
 TEMP_SIGNATURES_DIR = DATA_DIR / "temp_signatures"
-if not blob_store.BLOB_ENABLED:
-    # These are only ever written to on a normal persistent filesystem -- on Vercel,
-    # signature storage goes through Blob instead (see signature_path/temp_signature_path
-    # below), and this directory tree wouldn't even be writable there.
+if not os.environ.get("VERCEL"):
+    # These are only ever written to on a normal persistent filesystem -- Vercel's
+    # deployment bundle is read-only (signature storage goes through Blob instead,
+    # see signature_path/temp_signature_path below, once BLOB_READ_WRITE_TOKEN is set),
+    # so these mkdir calls would fail there even before Blob is configured.
     SIGNATURES_DIR.mkdir(parents=True, exist_ok=True)
     TEMP_SIGNATURES_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR = Path(tempfile.gettempdir()) / "quickprop_output" if os.environ.get("VERCEL") else Path(__file__).resolve().parent.parent / "output"
