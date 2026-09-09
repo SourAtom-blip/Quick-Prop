@@ -1052,7 +1052,7 @@ def render_pdf_native(
     from reportlab.lib.utils import ImageReader
     from reportlab.platypus import (
         Paragraph, Spacer, Table as RLTable, TableStyle,
-        Image as RLImage, SimpleDocTemplate,
+        Image as RLImage, SimpleDocTemplate, HRFlowable,
     )
 
     DOCX_ACCENTS = {
@@ -1064,6 +1064,7 @@ def render_pdf_native(
     }
     accent_rgb, _ = DOCX_ACCENTS.get(style, ((0xEA, 0x33, 0x23), "EA3323"))
     ACCENT = colors.Color(*[c / 255 for c in accent_rgb])
+    ACCENT_TINT = colors.Color(*[(c + (255 - c) * 0.88) / 255 for c in accent_rgb])
     INK = colors.Color(0x22 / 255, 0x22 / 255, 0x22 / 255)
     MUTED = colors.Color(0x6B / 255, 0x6B / 255, 0x6B / 255)
 
@@ -1120,9 +1121,11 @@ def render_pdf_native(
     if client_name:
         story.append(Paragraph(f"Prepared for {client_name}", styles["subtitle"]))
     story.append(Paragraph(f"Prepared by {company_data.get('name', '')}", styles["byline"]))
+    story.append(HRFlowable(width="100%", thickness=2, color=ACCENT, spaceAfter=16, spaceBefore=0))
 
     def add_heading(text):
         story.append(Paragraph(text, styles["heading"]))
+        story.append(HRFlowable(width="100%", thickness=0.75, color=ACCENT_TINT, spaceAfter=8, spaceBefore=0))
 
     def add_body(text):
         story.append(Paragraph(text.replace("\n", "<br/>"), styles["body"]))
@@ -1136,16 +1139,19 @@ def render_pdf_native(
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-            ("GRID", (0, 0), (-1, -1), 0.75, colors.HexColor("#CCCCCC")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), ACCENT),
+            ("TEXTCOLOR", (0, 1), (-1, -1), INK),
+            ("BACKGROUND", (0, 0), (-1, 0), ACCENT_TINT),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAFA")]),
+            ("GRID", (0, 0), (-1, -1), 0.75, colors.HexColor("#DDDDDD")),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(t)
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 12))
 
     flow_cfg = schema.get("content_flow")
     core_keys = set()
@@ -1205,13 +1211,24 @@ def render_pdf_native(
             columns = table_columns.get(standalone_cfg["key"]) or standalone_cfg["columns"]
             add_table(standalone_cfg.get("label", ""), columns, rows)
 
+    def draw_footer(c, doc_):
+        c.saveState()
+        c.setStrokeColor(colors.HexColor("#DDDDDD"))
+        c.setLineWidth(0.5)
+        c.line(margin, 0.5 * inch, page_w - margin, 0.5 * inch)
+        c.setFont("Helvetica", 8)
+        c.setFillColor(MUTED)
+        c.drawString(margin, 0.34 * inch, company_data.get("name", ""))
+        c.drawRightString(page_w - margin, 0.34 * inch, f"Page {doc_.page}")
+        c.restoreState()
+
     content_buf = io.BytesIO()
     margin = 0.7 * inch
     content_doc = SimpleDocTemplate(
         content_buf, pagesize=letter,
         leftMargin=margin, rightMargin=margin, topMargin=margin, bottomMargin=margin,
     )
-    content_doc.build(story)
+    content_doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
     content_buf.seek(0)
 
     writer = PdfWriter()
