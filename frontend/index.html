@@ -826,8 +826,9 @@ Online Ordering Module - $450"></textarea>
         if (!lines.length) return;
         const first = lines[0];
         const firstNoColon = first.replace(/:$/, "").toLowerCase();
-        if (/^client:/i.test(first)) {
-          result.clientName = first.replace(/^client:/i, "").trim();
+        const clientMatch = first.match(/^client(?:\s*name)?\s*:\s*(.*)$/i);
+        if (clientMatch) {
+          result.clientName = clientMatch[1].trim() || lines[1] || "";
           return;
         }
         if (firstNoColon === "pricing" || pricingLabels.includes(firstNoColon)) {
