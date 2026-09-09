@@ -7,3 +7,4 @@ Pillow
 a2wsgi
 reportlab
 vercel
+pypdf

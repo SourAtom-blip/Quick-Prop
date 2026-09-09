@@ -1042,15 +1042,17 @@ def render_pdf_native(
     fallback dump. Mirrors render_docx()'s content-walking logic so both exports stay in
     sync as templates evolve."""
     import io
+    from pypdf import PdfWriter, PdfReader
+    from reportlab.pdfgen import canvas as pdfcanvas
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.utils import ImageReader
     from reportlab.platypus import (
         Paragraph, Spacer, Table as RLTable, TableStyle,
-        Image as RLImage, PageBreak, NextPageTemplate, PageTemplate, Frame,
-        BaseDocTemplate,
+        Image as RLImage, SimpleDocTemplate,
     )
 
     DOCX_ACCENTS = {
@@ -1082,28 +1084,37 @@ def render_pdf_native(
     safe_client = safe_client[:60]
     out_path = OUTPUT_DIR / f"{company}-{service}-{style}-{safe_client}-{uuid.uuid4().hex[:8]}.pdf"
 
+    # ParagraphStyle's `leading` (line height) does NOT auto-scale with `fontSize` -- it
+    # defaults to a fixed small value unless given explicitly. Leaving it unset on a large
+    # font (like the 26pt title below) understates how much vertical space that line
+    # actually needs, so the next flowable starts drawing while the previous one's glyphs
+    # are still visually extending into that space -- i.e. overlapping text. Every style
+    # here sets leading to ~1.2x its font size to avoid that.
     styles = {
-        "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, textColor=ACCENT, spaceAfter=4, alignment=TA_LEFT),
-        "subtitle": ParagraphStyle("subtitle", fontName="Helvetica-Bold", fontSize=13, textColor=INK, spaceAfter=2),
-        "byline": ParagraphStyle("byline", fontName="Helvetica", fontSize=10, textColor=MUTED, spaceAfter=18),
-        "heading": ParagraphStyle("heading", fontName="Helvetica-Bold", fontSize=15, textColor=INK, spaceBefore=14, spaceAfter=6),
+        "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=26, leading=31, textColor=ACCENT, spaceAfter=4, alignment=TA_LEFT),
+        "subtitle": ParagraphStyle("subtitle", fontName="Helvetica-Bold", fontSize=13, leading=16, textColor=INK, spaceAfter=2),
+        "byline": ParagraphStyle("byline", fontName="Helvetica", fontSize=10, leading=13, textColor=MUTED, spaceAfter=18),
+        "heading": ParagraphStyle("heading", fontName="Helvetica-Bold", fontSize=15, leading=18, textColor=INK, spaceBefore=14, spaceAfter=6),
         "body": ParagraphStyle("body", fontName="Helvetica", fontSize=10.5, textColor=INK, leading=15, spaceAfter=10),
-        "label": ParagraphStyle("label", fontName="Helvetica-Bold", fontSize=10.5, textColor=INK, spaceAfter=4),
+        "label": ParagraphStyle("label", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=INK, spaceAfter=4),
     }
 
+    def full_bleed_pdf_page(blob) -> bytes:
+        """A single full-bleed image page, built with a raw canvas (no Platypus frames
+        involved at all) -- kept as its own tiny PDF and merged in with pypdf afterwards.
+        Mixing a zero-margin full-bleed page and a normally-margined content flow in one
+        BaseDocTemplate via NextPageTemplate/PageTemplate switching turned out fragile (it
+        produced a page where the title got drawn twice, overlapping, at the wrong scale) --
+        building each part as an independent, simple PDF and merging them sidesteps that
+        entirely."""
+        buf = io.BytesIO()
+        c = pdfcanvas.Canvas(buf, pagesize=letter)
+        c.drawImage(ImageReader(io.BytesIO(blob)), 0, 0, width=page_w, height=page_h)
+        c.showPage()
+        c.save()
+        return buf.getvalue()
+
     story = []
-
-    def full_bleed_image(blob):
-        img = RLImage(io.BytesIO(blob), width=page_w, height=page_h)
-        img.hAlign = "CENTER"
-        return img
-
-    if cover_blob:
-        story.append(NextPageTemplate("full"))
-        story.append(full_bleed_image(cover_blob))
-        story.append(PageBreak())
-        story.append(NextPageTemplate("content"))
-
     client_name = field_values.get("client_name", "")
     story.append(Paragraph(schema.get("label", "Proposal"), styles["title"]))
     if client_name:
@@ -1194,20 +1205,23 @@ def render_pdf_native(
             columns = table_columns.get(standalone_cfg["key"]) or standalone_cfg["columns"]
             add_table(standalone_cfg.get("label", ""), columns, rows)
 
-    if closing_blob:
-        story.append(NextPageTemplate("full"))
-        story.append(PageBreak())
-        story.append(full_bleed_image(closing_blob))
-
-    doc = BaseDocTemplate(str(out_path), pagesize=letter)
+    content_buf = io.BytesIO()
     margin = 0.7 * inch
-    content_frame = Frame(margin, margin, page_w - 2 * margin, page_h - 2 * margin, id="content")
-    full_frame = Frame(0, 0, page_w, page_h, id="full", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    templates = [PageTemplate(id="content", frames=[content_frame]), PageTemplate(id="full", frames=[full_frame])]
+    content_doc = SimpleDocTemplate(
+        content_buf, pagesize=letter,
+        leftMargin=margin, rightMargin=margin, topMargin=margin, bottomMargin=margin,
+    )
+    content_doc.build(story)
+    content_buf.seek(0)
+
+    writer = PdfWriter()
     if cover_blob:
-        templates.reverse()  # page 1 must render with the "full" (zero-margin) template
-    doc.addPageTemplates(templates)
-    doc.build(story)
+        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(cover_blob))))
+    writer.append(PdfReader(content_buf))
+    if closing_blob:
+        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(closing_blob))))
+    with open(out_path, "wb") as f:
+        writer.write(f)
     return out_path
 
 
