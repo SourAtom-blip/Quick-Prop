@@ -24,11 +24,17 @@ def blob_put(pathname: str, data: bytes) -> None:
 
 
 def blob_get(pathname: str) -> bytes | None:
+    """Returns None (rather than raising) whenever the blob simply doesn't exist --
+    callers use this purely to check "is there a signature saved for this company/id",
+    which is a normal, expected case, not an error."""
     from vercel.blob import AsyncBlobClient
 
     async def _get():
         client = AsyncBlobClient()
-        result = await client.get(pathname, access="public")
+        try:
+            result = await client.get(pathname, access="public")
+        except Exception:
+            return None
         if result is None:
             return None
         chunks = []
