@@ -703,6 +703,15 @@ def _largest_picture_blob(slide):
     return best.image.blob if best is not None else None
 
 
+def _mean_brightness(image_blob: bytes) -> float:
+    """0 (black) - 255 (white) average brightness, used to decide whether an image is safe
+    to use as a full-page background behind dark text."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(image_blob)).convert("L").resize((40, 40))
+    pixels = list(img.getdata())
+    return sum(pixels) / len(pixels)
+
+
 def _cover_text_overlays(slide) -> list[dict]:
     """Some styles' cover/closing slides aren't a single flat picture -- they have a live
     text box (e.g. the client's name) sitting on top of the background art, which is why
@@ -1049,6 +1058,22 @@ def render_pdf_native(
         closing_blob = _largest_picture_blob(closing_slide)
         cover_overlays = _cover_text_overlays(cover_slide)
         closing_overlays = _cover_text_overlays(closing_slide)
+        # Styles built around content_flow give every generated content slide its own
+        # full-bleed background art (logo, subtle texture, footer URL) -- the same one each
+        # time, cloned from `first_slide`. Grabbing it here means the PDF's content pages
+        # get that same branded backdrop instead of plain white.
+        content_bg_blob = None
+        flow_cfg_for_bg = schema.get("content_flow")
+        if flow_cfg_for_bg:
+            first_slide_idx = flow_cfg_for_bg["first_slide"] - 1
+            if 0 <= first_slide_idx < len(filled_prs.slides):
+                candidate_blob = _largest_picture_blob(filled_prs.slides[first_slide_idx])
+                # Not every style's `first_slide` is a light, subtle repeating pattern --
+                # some are a heavily-styled dark section slide, which would swallow this
+                # page's dark body text if used as-is. Only use it when it's actually light
+                # enough for that dark text to stay legible on top of it.
+                if candidate_blob and _mean_brightness(candidate_blob) >= 180:
+                    content_bg_blob = candidate_blob
     finally:
         filled_pptx_path.unlink(missing_ok=True)
 
@@ -1193,13 +1218,22 @@ def render_pdf_native(
 
     def draw_footer(c, doc_):
         c.saveState()
-        c.setStrokeColor(colors.HexColor("#DDDDDD"))
-        c.setLineWidth(0.5)
-        c.line(margin, 0.5 * inch, page_w - margin, 0.5 * inch)
-        c.setFont("Helvetica", 8)
-        c.setFillColor(MUTED)
-        c.drawString(margin, 0.34 * inch, company_data.get("name", ""))
-        c.drawRightString(page_w - margin, 0.34 * inch, f"Page {doc_.page}")
+        if content_bg_blob:
+            # The watermark art already has its own baked-in footer line/URL at the bottom
+            # of the page -- adding our usual line + company name there would just overlap
+            # it, so only the page number gets added, tucked up in the corner instead.
+            c.drawImage(ImageReader(io.BytesIO(content_bg_blob)), 0, 0, width=page_w, height=page_h)
+            c.setFont("Helvetica", 8)
+            c.setFillColor(MUTED)
+            c.drawRightString(page_w - margin, 0.3 * inch, f"Page {doc_.page}")
+        else:
+            c.setStrokeColor(colors.HexColor("#DDDDDD"))
+            c.setLineWidth(0.5)
+            c.line(margin, 0.5 * inch, page_w - margin, 0.5 * inch)
+            c.setFont("Helvetica", 8)
+            c.setFillColor(MUTED)
+            c.drawString(margin, 0.34 * inch, company_data.get("name", ""))
+            c.drawRightString(page_w - margin, 0.34 * inch, f"Page {doc_.page}")
         c.restoreState()
 
     content_buf = io.BytesIO()
