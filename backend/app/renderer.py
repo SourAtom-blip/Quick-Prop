@@ -210,6 +210,7 @@ def _draw_dynamic_badge(slide, shape, text, original_pt, run, wrapped_lines_and_
         return False
 
     orig_width_in = shape.width / 914400
+    orig_height_in = shape.height / 914400
     pad_in = 0.14
     margin = Inches(0.15)
 
@@ -220,7 +221,11 @@ def _draw_dynamic_badge(slide, shape, text, original_pt, run, wrapped_lines_and_
             lines, _ = wrapped_lines_and_height(size_pt, width_in)
         _, height_in = wrapped_lines_and_height(size_pt, width_in)
         new_width = Inches(width_in)
-        new_height = Inches(height_in + pad_in * 2)
+        # Never end up shorter than the original shape -- many of these sit over a
+        # decorative pill baked into the slide's fixed background image at that original
+        # size, so a shrunk-down badge leaves a sliver of that background pill visible
+        # around it, looking like two mismatched, stacked pills instead of one.
+        new_height = Inches(max(height_in + pad_in * 2, orig_height_in))
         center_x = shape.left + shape.width / 2
         center_y = shape.top + shape.height / 2
         new_left = int(center_x - new_width / 2)
