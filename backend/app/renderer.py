@@ -713,6 +713,23 @@ def _mean_brightness(image_blob: bytes) -> float:
     return sum(pixels) / len(pixels)
 
 
+def _lightened_to(image_blob: bytes, target_brightness: float = 210) -> bytes:
+    """Blends the image toward white just enough to make dark body text sit legibly on top
+    of it, rather than dropping a heavily-styled dark background entirely -- some branding
+    (the logo, the texture) still comes through, just faded, instead of a plain blank page."""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_blob)).convert("RGB")
+    current = _mean_brightness(image_blob)
+    # alpha = how much white to blend in; solving current*(1-a) + 255*a = target for a.
+    alpha = max(0.0, min(0.92, (target_brightness - current) / (255 - current))) if current < 255 else 0.0
+    white = Image.new("RGB", img.size, (255, 255, 255))
+    blended = Image.blend(img, white, alpha)
+    out = io.BytesIO()
+    blended.save(out, format="PNG")
+    return out.getvalue()
+
+
 def _cover_text_overlays(slide, slide_w_emu=None, slide_h_emu=None) -> list[dict]:
     """Some styles' cover/closing slides aren't a single flat picture -- they have a live
     text box (e.g. the client's name) sitting on top of the background art, which is why
@@ -1111,11 +1128,12 @@ def render_pdf_native(
             if 0 <= first_slide_idx < len(filled_prs.slides):
                 candidate_blob = _largest_picture_blob(filled_prs.slides[first_slide_idx])
                 # Not every style's `first_slide` is a light, subtle repeating pattern --
-                # some are a heavily-styled dark section slide, which would swallow this
-                # page's dark body text if used as-is. Only use it when it's actually light
-                # enough for that dark text to stay legible on top of it.
-                if candidate_blob and _mean_brightness(candidate_blob) >= 180:
-                    content_bg_blob = candidate_blob
+                # some are a heavily-styled dark section slide. Rather than drop it entirely
+                # (a plain white page, no branding at all), it gets lightened toward white
+                # until the dark body text sitting on top of it stays legible -- the logo
+                # and texture still show through, just faded.
+                if candidate_blob:
+                    content_bg_blob = candidate_blob if _mean_brightness(candidate_blob) >= 180 else _lightened_to(candidate_blob)
             already_shown_text = {
                 str(v).strip() for v in list(field_values.values()) + [company_data.get("name", "")]
                 if isinstance(v, str) and v.strip()
