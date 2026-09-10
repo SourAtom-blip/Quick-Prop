@@ -17,6 +17,7 @@ from . import blob_store
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_THEME_COLOR
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 
@@ -728,6 +729,21 @@ def _cover_text_overlays(slide) -> list[dict]:
     sitting under its "Thank You" background art). Overlaying it anyway would add a
     duplicate, mismatched copy of text the design never actually shows.
     """
+    def _resolve_color(run):
+        try:
+            if not (run and run.font.color and run.font.color.type is not None):
+                return None
+            # An explicit RGB value resolves directly; a *theme* color (very common for
+            # this kind of reversed/knockout text over a photo background -- e.g.
+            # schemeClr "bg1") has no .rgb to read, so approximate from the scheme name:
+            # background-slot colors read as white, text-slot colors as black. Wrong for
+            # an unusual theme, but far closer than defaulting to black on every cover.
+            if run.font.color.type == MSO_THEME_COLOR.NOT_THEME_COLOR:
+                return str(run.font.color.rgb)
+            return "FFFFFF" if "BACKGROUND" in str(run.font.color.theme_color) else "000000"
+        except AttributeError:
+            return None
+
     shapes = list(slide.shapes)
     picture_indexes = [i for i, sh in enumerate(shapes) if sh.shape_type == 13]
     topmost_picture_index = max(picture_indexes) if picture_indexes else -1
@@ -736,44 +752,38 @@ def _cover_text_overlays(slide) -> list[dict]:
     for i, sh in enumerate(shapes):
         if sh.shape_type == 13 or not sh.has_text_frame or i < topmost_picture_index:
             continue
-        # python-pptx joins multiple paragraphs/soft line-breaks with "\n"/"\x0b" -- drawn
-        # literally via drawCentredString (a single-line call) that shows as a missing-glyph
-        # box, not an actual line break, so collapse them to spaces for this one-line overlay.
-        text = " ".join(sh.text_frame.text.replace("\x0b", "\n").split("\n")).strip()
-        text = " ".join(text.split())
-        if not text or not sh.width or not sh.height:
+        if not sh.width or not sh.height:
             continue
-        run = None
+        # Each paragraph becomes its own line, stacked top-to-bottom within the shape's own
+        # footprint -- a shape can hold several distinct paragraphs (e.g. a signature block's
+        # Name/Date/Phone/Email lines), and collapsing them onto a single drawn line the way
+        # a simple one-line title/badge overlay works would just pile them all on top of each
+        # other into an illegible mess.
+        lines = []
         for para in sh.text_frame.paragraphs:
-            if para.runs:
-                run = para.runs[0]
-                break
-        size_pt = run.font.size.pt if run and run.font.size else 24
-        bold = bool(run.font.bold) if run else False
-        color_hex = None
-        try:
-            if run and run.font.color and run.font.color.type is not None:
-                # An explicit RGB value resolves directly; a *theme* color (very common for
-                # this kind of reversed/knockout text over a photo background -- e.g.
-                # schemeClr "bg1") has no .rgb to read, so approximate from the scheme name:
-                # background-slot colors read as white, text-slot colors as black. Wrong for
-                # an unusual theme, but far closer than defaulting to black on every cover.
-                if run.font.color.type == MSO_THEME_COLOR.NOT_THEME_COLOR:
-                    color_hex = str(run.font.color.rgb)
-                else:
-                    theme_name = str(run.font.color.theme_color)
-                    color_hex = "FFFFFF" if "BACKGROUND" in theme_name else "000000"
-        except AttributeError:
-            color_hex = None
+            # python-pptx separates soft line-breaks within a paragraph with "\x0b" -- treat
+            # each as its own line too, rather than joining them (or the leftover \x0b shows
+            # as a missing-glyph box when drawn).
+            for line_text in "".join(r.text for r in para.runs).split("\x0b"):
+                line_text = " ".join(line_text.split())
+                if not line_text:
+                    continue
+                run = next((r for r in para.runs if r.text.strip()), para.runs[0] if para.runs else None)
+                lines.append({
+                    "text": line_text,
+                    "size_pt": run.font.size.pt if run and run.font.size else 14,
+                    "bold": bool(run.font.bold) if run else False,
+                    "color_hex": _resolve_color(run),
+                    "align": para.alignment,
+                })
+        if not lines:
+            continue
         overlays.append({
-            "text": text,
             "left_in": sh.left / 914400,
             "top_in": sh.top / 914400,
             "width_in": sh.width / 914400,
             "height_in": sh.height / 914400,
-            "size_pt": size_pt,
-            "bold": bold,
-            "color_hex": color_hex,
+            "lines": lines,
         })
     return overlays
 
@@ -1110,12 +1120,33 @@ def render_pdf_native(
         c = pdfcanvas.Canvas(buf, pagesize=letter)
         c.drawImage(ImageReader(io.BytesIO(blob)), 0, 0, width=page_w, height=page_h)
         for ov in (overlays or []):
-            font = "Helvetica-Bold" if ov["bold"] else "Helvetica"
-            c.setFont(font, ov["size_pt"])
-            c.setFillColor(colors.HexColor(f"#{ov['color_hex']}") if ov["color_hex"] else colors.black)
-            cx = (ov["left_in"] + ov["width_in"] / 2) * inch
-            cy = page_h - (ov["top_in"] + ov["height_in"] / 2) * inch - ov["size_pt"] * 0.18
-            c.drawCentredString(cx, cy, ov["text"])
+            lines = ov["lines"]
+            # A single short line (a name badge, a title) reads best vertically centered in
+            # its shape; several stacked lines (a Name/Date/Phone/Email block) instead need
+            # to start from the top and flow down, or they'd all be centered on top of each
+            # other -- exactly the illegible pile-up this replaced.
+            line_height_pt = max(ln["size_pt"] for ln in lines) * 1.25
+            block_height_pt = line_height_pt * len(lines)
+            if len(lines) == 1:
+                top_y = page_h - (ov["top_in"] + ov["height_in"] / 2) * inch + block_height_pt / 2 * 0.72
+            else:
+                top_y = page_h - ov["top_in"] * inch - line_height_pt * 0.8
+            for idx, ln in enumerate(lines):
+                font = "Helvetica-Bold" if ln["bold"] else "Helvetica"
+                c.setFont(font, ln["size_pt"])
+                c.setFillColor(colors.HexColor(f"#{ln['color_hex']}") if ln["color_hex"] else colors.black)
+                y = top_y - idx * line_height_pt
+                # No explicit alignment on the paragraph most often means "just a label"
+                # (left-aligned, true to how PowerPoint itself would show it) -- except for
+                # a single-line shape, which in practice is almost always a name/title
+                # sitting centered inside a pill or banner rather than pinned to its left edge.
+                align = ln["align"] or (PP_ALIGN.CENTER if len(lines) == 1 else PP_ALIGN.LEFT)
+                if align == PP_ALIGN.CENTER:
+                    c.drawCentredString((ov["left_in"] + ov["width_in"] / 2) * inch, y, ln["text"])
+                elif ln["align"] == PP_ALIGN.RIGHT:
+                    c.drawRightString((ov["left_in"] + ov["width_in"]) * inch, y, ln["text"])
+                else:
+                    c.drawString(ov["left_in"] * inch, y, ln["text"])
         c.showPage()
         c.save()
         return buf.getvalue()
