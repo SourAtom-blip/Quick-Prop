@@ -713,7 +713,7 @@ def _mean_brightness(image_blob: bytes) -> float:
     return sum(pixels) / len(pixels)
 
 
-def _cover_text_overlays(slide) -> list[dict]:
+def _cover_text_overlays(slide, slide_w_emu=None, slide_h_emu=None) -> list[dict]:
     """Some styles' cover/closing slides aren't a single flat picture -- they have a live
     text box (e.g. the client's name) sitting on top of the background art, which is why
     that slide's picture alone doesn't carry it. render_docx/render_pdf_native only ever
@@ -745,14 +745,39 @@ def _cover_text_overlays(slide) -> list[dict]:
             return None
 
     shapes = list(slide.shapes)
-    picture_indexes = [i for i, sh in enumerate(shapes) if sh.shape_type == 13]
-    topmost_picture_index = max(picture_indexes) if picture_indexes else -1
+    # The background is specifically the *largest* picture (matching _largest_picture_blob's
+    # own choice) -- a slide can have a second, small picture stacked on top of real content
+    # (a signature image, say), and using the z-order of *that* one instead would wrongly
+    # treat every ordinary text shape below it as "hidden behind the background". But a slide
+    # with no genuine full-bleed picture at all (a plain white slide with just a small header
+    # banner and a small watermark logo, say) has no real "background" to exclude either --
+    # otherwise whichever of those two happens to be largest gets wrongly treated as one.
+    slide_area = (slide_w_emu or 0) * (slide_h_emu or 0)
+    background_index = -1
+    background_area = 0
+    for i, sh in enumerate(shapes):
+        if sh.shape_type == 13:
+            area = (sh.width or 0) * (sh.height or 0)
+            if area > background_area:
+                background_area, background_index = area, i
+    is_full_bleed = slide_area and background_area >= slide_area * 0.85
+    topmost_picture_index = background_index if is_full_bleed else -1
 
     overlays = []
     for i, sh in enumerate(shapes):
-        if sh.shape_type == 13 or not sh.has_text_frame or i < topmost_picture_index:
+        if i < topmost_picture_index or not sh.width or not sh.height:
             continue
-        if not sh.width or not sh.height:
+        if sh.shape_type == 13:
+            # A second picture stacked on top of the background -- most often an actual
+            # embedded signature image -- needs to be drawn too, not just skipped as if it
+            # were more background art.
+            overlays.append({
+                "left_in": sh.left / 914400, "top_in": sh.top / 914400,
+                "width_in": sh.width / 914400, "height_in": sh.height / 914400,
+                "image_blob": sh.image.blob,
+            })
+            continue
+        if not sh.has_text_frame:
             continue
         # Each paragraph becomes its own line, stacked top-to-bottom within the shape's own
         # footprint -- a shape can hold several distinct paragraphs (e.g. a signature block's
@@ -1024,6 +1049,7 @@ def render_pdf_native(
     import io
     from pypdf import PdfWriter, PdfReader
     from reportlab.pdfgen import canvas as pdfcanvas
+    from reportlab.pdfbase import pdfmetrics
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.units import inch
     from reportlab.lib import colors
@@ -1066,14 +1092,20 @@ def render_pdf_native(
         cover_slide, closing_slide = filled_prs.slides[0], filled_prs.slides[-1]
         cover_blob = _largest_picture_blob(cover_slide)
         closing_blob = _largest_picture_blob(closing_slide)
-        cover_overlays = _cover_text_overlays(cover_slide)
-        closing_overlays = _cover_text_overlays(closing_slide)
+        cover_overlays = _cover_text_overlays(cover_slide, filled_prs.slide_width, filled_prs.slide_height)
+        closing_overlays = _cover_text_overlays(closing_slide, filled_prs.slide_width, filled_prs.slide_height)
         # Styles built around content_flow give every generated content slide its own
         # full-bleed background art (logo, subtle texture, footer URL) -- the same one each
         # time, cloned from `first_slide`. Grabbing it here means the PDF's content pages
         # get that same branded backdrop instead of plain white.
         content_bg_blob = None
         flow_cfg_for_bg = schema.get("content_flow")
+        # Slides in between the content_flow's own pages and the closing slide -- e.g. a
+        # signature/agreement page with "By: ... / To: ..." blocks -- were being dropped
+        # entirely (render_pdf_native only ever looked at slide 0 and the last slide), even
+        # though they carry real, filled-in content of their own. Any such slide is rendered
+        # the same way as the cover/closing (its art + its live text), in its original order.
+        extra_slide_pages = []
         if flow_cfg_for_bg:
             first_slide_idx = flow_cfg_for_bg["first_slide"] - 1
             if 0 <= first_slide_idx < len(filled_prs.slides):
@@ -1084,6 +1116,44 @@ def render_pdf_native(
                 # enough for that dark text to stay legible on top of it.
                 if candidate_blob and _mean_brightness(candidate_blob) >= 180:
                     content_bg_blob = candidate_blob
+            already_shown_text = {
+                str(v).strip() for v in list(field_values.values()) + [company_data.get("name", "")]
+                if isinstance(v, str) and v.strip()
+            }
+            for idx in range(1, len(filled_prs.slides) - 1):
+                if idx == first_slide_idx:
+                    # This is content_flow's own page -- already rendered as flowing text,
+                    # not a distinct standalone slide.
+                    continue
+                extra_slide = filled_prs.slides[idx]
+                extra_overlays = _cover_text_overlays(extra_slide, filled_prs.slide_width, filled_prs.slide_height)
+                # Only stretch a picture full-page if it's genuinely meant as one -- a small
+                # header banner or watermark logo (this slide's actual two pictures) would
+                # otherwise get blown up into a distorted full-page smear. Anything smaller
+                # is left to be drawn at its own natural size as a regular image overlay
+                # instead (already collected into extra_overlays above).
+                slide_area = filled_prs.slide_width * filled_prs.slide_height
+                largest = max(
+                    (sh for sh in extra_slide.shapes if sh.shape_type == 13),
+                    key=lambda sh: (sh.width or 0) * (sh.height or 0), default=None,
+                )
+                extra_blob = None
+                if largest and (largest.width or 0) * (largest.height or 0) >= slide_area * 0.85:
+                    extra_blob = largest.image.blob
+                # A second picture alone isn't a reliable enough signal by itself -- a purely
+                # decorative divider/section slide can also happen to have more than one
+                # image and no real content, and would otherwise show up as a blank/garbled
+                # extra page. Require actual live text on it too before treating it as a
+                # genuine standalone page (e.g. a signature block) worth keeping. And if
+                # every line on it is text already shown on the content-flow page itself
+                # (e.g. a cloned content_flow page when several sections needed more than
+                # one page), skip it too -- it's a duplicate, not a new page.
+                text_lines = [ln["text"] for ov in extra_overlays for ln in ov.get("lines", [])]
+                is_duplicate_content = text_lines and all(
+                    any(t and (t in known or known in t) for known in already_shown_text) for t in text_lines
+                )
+                if text_lines and not is_duplicate_content:
+                    extra_slide_pages.append((extra_blob, extra_overlays))
     finally:
         filled_pptx_path.unlink(missing_ok=True)
 
@@ -1118,9 +1188,35 @@ def render_pdf_native(
         entirely."""
         buf = io.BytesIO()
         c = pdfcanvas.Canvas(buf, pagesize=letter)
-        c.drawImage(ImageReader(io.BytesIO(blob)), 0, 0, width=page_w, height=page_h)
+        if blob:
+            c.drawImage(ImageReader(io.BytesIO(blob)), 0, 0, width=page_w, height=page_h)
         for ov in (overlays or []):
-            lines = ov["lines"]
+            if "image_blob" in ov:
+                c.drawImage(
+                    ImageReader(io.BytesIO(ov["image_blob"])),
+                    ov["left_in"] * inch, page_h - (ov["top_in"] + ov["height_in"]) * inch,
+                    width=ov["width_in"] * inch, height=ov["height_in"] * inch,
+                    mask="auto",
+                )
+                continue
+            # A paragraph's line break in the source template was authored for its original
+            # placeholder text -- real client/company names substituted in are often longer
+            # and would run straight off the edge of the shape unless re-wrapped here to
+            # its actual width.
+            max_width_pt = ov["width_in"] * inch
+            lines = []
+            for ln in ov["lines"]:
+                font_name = "Helvetica-Bold" if ln["bold"] else "Helvetica"
+                words = ln["text"].split(" ")
+                current = ""
+                for word in words:
+                    candidate = f"{current} {word}".strip()
+                    if current and pdfmetrics.stringWidth(candidate, font_name, ln["size_pt"]) > max_width_pt:
+                        lines.append({**ln, "text": current})
+                        current = word
+                    else:
+                        current = candidate
+                lines.append({**ln, "text": current})
             # A single short line (a name badge, a title) reads best vertically centered in
             # its shape; several stacked lines (a Name/Date/Phone/Email block) instead need
             # to start from the top and flow down, or they'd all be centered on top of each
@@ -1280,6 +1376,8 @@ def render_pdf_native(
     if cover_blob:
         writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(cover_blob, cover_overlays))))
     writer.append(PdfReader(content_buf))
+    for extra_blob, extra_overlays in extra_slide_pages:
+        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(extra_blob, extra_overlays))))
     if closing_blob:
         writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(closing_blob, closing_overlays))))
     with open(out_path, "wb") as f:
