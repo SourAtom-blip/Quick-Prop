@@ -2,6 +2,7 @@
   "template_id": "canvas-digital.web-development.style-a",
   "label": "Website Proposal (Grid Style)",
   "source_file": "style-a.pptx",
+  "badge_colors": ["F0EA4C", "EBC21C"],
   "fields": [
     {
       "key": "client_name",
