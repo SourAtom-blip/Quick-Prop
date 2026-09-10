@@ -16,9 +16,6 @@ from . import blob_store
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
-from pptx.oxml import parse_xml
 from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 
@@ -112,32 +109,6 @@ def _try_remove_shape(slide, shape_name: str) -> None:
     shape._element.getparent().remove(shape._element)
 
 
-def _set_gradient_fill(shape, color1: RGBColor, color2: RGBColor, angle_deg=0) -> None:
-    """Applies a 2-stop linear gradient fill via raw OOXML -- python-pptx has no
-    gradient-fill API of its own."""
-    spPr = shape.fill._xPr
-    for tag in ("a:noFill", "a:solidFill", "a:gradFill", "a:blipFill", "a:pattFill"):
-        el = spPr.find(qn(tag))
-        if el is not None:
-            spPr.remove(el)
-    angle_60000 = int(angle_deg * 60000)
-    grad_xml = (
-        '<a:gradFill xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" rotWithShape="1">'
-        '<a:gsLst>'
-        f'<a:gs pos="0"><a:srgbClr val="{str(color1)}"/></a:gs>'
-        f'<a:gs pos="100000"><a:srgbClr val="{str(color2)}"/></a:gs>'
-        '</a:gsLst>'
-        f'<a:lin ang="{angle_60000}" scaled="1"/>'
-        '</a:gradFill>'
-    )
-    grad_el = parse_xml(grad_xml)
-    ln_el = spPr.find(qn("a:ln"))
-    if ln_el is not None:
-        ln_el.addprevious(grad_el)
-    else:
-        spPr.append(grad_el)
-
-
 def _enable_shrink_to_fit(slide, shape, slide_width_emu=None, slide_height_emu=None, badge_colors=None) -> None:
     """PowerPoint's own "shrink text on overflow" only ever recalculates when a human
     types into the box in the app — opening or exporting a file we generated headlessly
@@ -149,13 +120,15 @@ def _enable_shrink_to_fit(slide, shape, slide_width_emu=None, slide_height_emu=N
     cram the entire surrounding sentence onto one line instead of just the substituted
     span, which would look far worse than the overflow it was meant to fix.
 
-    Many of these shapes are plain, invisible textboxes sitting on top of a decorative
-    "pill"/badge that's actually baked into the slide's fixed background image at a
-    one-line size — so simply wrapping text here would spill extra lines out past that
-    fixed graphic. If the value fits on one line at a legible size, we keep it exactly as
-    designed. If it doesn't, we don't shrink text down to near-illegible trying to force
-    one line — instead we draw our own dynamically-sized pill behind the wrapped text, so
-    it always looks like an intentional badge instead of overflow.
+    Many of these shapes are plain, invisible textboxes sitting directly on top of a
+    decorative "pill"/badge that's actually baked into the slide's fixed background image
+    at a one-line size. An earlier version of this drew a brand-new replacement shape over
+    long values instead of just shrinking the text -- but that new shape's size never quite
+    matched the pill baked into the background, so the original pill peeked out from behind
+    it, looking like two mismatched, stacked pills. Keeping the exact same shape and just
+    shrinking the font (wrapping onto a second line within its own footprint only if it
+    still doesn't fit at a legible size) guarantees there is only ever the one, original,
+    correctly-sized pill on screen.
     """
     if not shape.has_text_frame or not shape.width:
         return
@@ -163,6 +136,7 @@ def _enable_shrink_to_fit(slide, shape, slide_width_emu=None, slide_height_emu=N
     if len(tf.paragraphs) != 1 or len(tf.paragraphs[0].runs) != 1:
         return
     box_width_in = shape.width / 914400
+    box_height_in = shape.height / 914400
     run = tf.paragraphs[0].runs[0]
     text = run.text
     if not text:
@@ -172,117 +146,32 @@ def _enable_shrink_to_fit(slide, shape, slide_width_emu=None, slide_height_emu=N
     def fits_unwrapped(size_pt):
         return len(text) * (size_pt * 0.52) / 72 <= box_width_in * 0.92
 
-    def wrapped_lines_and_height(size_pt, width_in):
-        char_width_in = size_pt * 0.52 / 72
-        chars_per_line = max(1, int(width_in * 0.9 / char_width_in))
-        lines = max(1, math.ceil(len(text) / chars_per_line))
-        return lines, lines * size_pt * 1.35 / 72
-
     if fits_unwrapped(original_pt):
         tf.word_wrap = False
         return
 
-    _draw_dynamic_badge(slide, shape, text, original_pt, run, wrapped_lines_and_height, slide_width_emu, slide_height_emu, badge_colors)
+    def lines_needed(size_pt, width_in):
+        char_width_in = size_pt * 0.52 / 72
+        chars_per_line = max(1, int(width_in * 0.9 / char_width_in))
+        return max(1, math.ceil(len(text) / chars_per_line))
 
+    def block_height_in(size_pt, lines):
+        return lines * size_pt * 1.35 / 72
 
-def _draw_dynamic_badge(slide, shape, text, original_pt, run, wrapped_lines_and_height, slide_width_emu=None, slide_height_emu=None, badge_colors=None) -> None:
-    # Other shapes already on this slide (signature blocks, titles, etc. sitting close by) —
-    # the badge must not grow into them, only into genuinely empty space. Full-slide
-    # background pictures/watermarks are excluded: they cover most or all of the page, so
-    # naively treating them as "siblings" would flag every position as a collision and force
-    # the font all the way down to its floor for no real reason.
-    def is_full_slide_bg(sh):
-        if not slide_width_emu or not slide_height_emu:
-            return False
-        return sh.width >= slide_width_emu * 0.9 and sh.height >= slide_height_emu * 0.9
-
-    siblings = [
-        (sh.left, sh.top, sh.left + sh.width, sh.top + sh.height)
-        for sh in slide.shapes
-        if sh is not shape and sh.left is not None and sh.width and sh.height and not is_full_slide_bg(sh)
-    ]
-
-    def overlaps_sibling(left, top, width, height):
-        right, bottom = left + width, top + height
-        for sl, st, sr, sb in siblings:
-            if left < sr and sl < right and top < sb and st < bottom:
-                return True
-        return False
-
-    orig_width_in = shape.width / 914400
-    orig_height_in = shape.height / 914400
-    pad_in = 0.14
-    margin = Inches(0.15)
-
-    def layout_for(width_in, size_pt):
-        lines, _ = wrapped_lines_and_height(size_pt, width_in)
-        while size_pt > 10 and lines > 2:
-            size_pt -= 1
-            lines, _ = wrapped_lines_and_height(size_pt, width_in)
-        _, height_in = wrapped_lines_and_height(size_pt, width_in)
-        new_width = Inches(width_in)
-        # Never end up shorter than the original shape -- many of these sit over a
-        # decorative pill baked into the slide's fixed background image at that original
-        # size, so a shrunk-down badge leaves a sliver of that background pill visible
-        # around it, looking like two mismatched, stacked pills instead of one.
-        new_height = Inches(max(height_in + pad_in * 2, orig_height_in))
-        center_x = shape.left + shape.width / 2
-        center_y = shape.top + shape.height / 2
-        new_left = int(center_x - new_width / 2)
-        new_top = int(center_y - new_height / 2)
-        if slide_width_emu:
-            new_left = max(margin, min(new_left, slide_width_emu - new_width - margin))
-        if slide_height_emu:
-            new_top = max(margin, min(new_top, slide_height_emu - new_height - margin))
-        return size_pt, new_left, new_top, new_width, new_height
-
-    # Widen a bit first — a long name gets more room before we shrink its font at all.
-    # Back off in steps if that growth would collide with a neighboring shape, never
-    # going narrower than the box originally was.
-    width_in = min(orig_width_in * 1.6, 7.6)
-    size_pt, new_left, new_top, new_width, new_height = layout_for(width_in, original_pt)
-    while width_in > orig_width_in and overlaps_sibling(new_left, new_top, new_width, new_height):
-        width_in = max(orig_width_in, width_in - 0.2)
-        size_pt, new_left, new_top, new_width, new_height = layout_for(width_in, original_pt)
-    # Width alone may not be the problem — a tall multi-line badge can still overlap
-    # vertically-close neighbors, so shrink the font further as a last resort.
-    while size_pt > 10 and overlaps_sibling(new_left, new_top, new_width, new_height):
+    # Shrink the font (and let it wrap within the shape's own original width) until the
+    # wrapped block's height fits back inside the shape's own original height -- never
+    # resizing or replacing the shape itself. Floors at 7pt so it stays legible even if a
+    # genuinely huge value can't be made to fit cleanly; a little overflow at that point is
+    # less visually broken than a second, mismatched pill.
+    size_pt = original_pt
+    while size_pt > 7:
+        lines = lines_needed(size_pt, box_width_in)
+        if block_height_in(size_pt, lines) <= box_height_in * 0.92:
+            break
         size_pt -= 1
-        size_pt, new_left, new_top, new_width, new_height = layout_for(width_in, size_pt)
 
-    badge = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, new_left, new_top, new_width, new_height)
-    badge.line.fill.background()
-    badge.shadow.inherit = False
-    if badge_colors:
-        _set_gradient_fill(badge, RGBColor.from_string(badge_colors[0]), RGBColor.from_string(badge_colors[1]))
-        text_color_default = RGBColor(0xFF, 0xFF, 0xFF)
-    else:
-        badge.fill.solid()
-        badge.fill.fore_color.rgb = RGBColor(0xF0, 0xC1, 0x1E)
-        text_color_default = RGBColor(0x14, 0x14, 0x14)
-
-    btf = badge.text_frame
-    btf.word_wrap = True
-    btf.margin_left = Inches(0.14)
-    btf.margin_right = Inches(0.14)
-    btf.margin_top = Inches(0.06)
-    btf.margin_bottom = Inches(0.06)
-    p = btf.paragraphs[0]
-    p.alignment = PP_ALIGN.CENTER
-    new_run = p.add_run()
-    new_run.text = text
-    new_run.font.size = Pt(size_pt)
-    new_run.font.bold = run.font.bold
-    new_run.font.name = run.font.name
-    try:
-        if run.font.color and run.font.color.type is not None:
-            new_run.font.color.rgb = run.font.color.rgb
-        else:
-            new_run.font.color.rgb = text_color_default
-    except AttributeError:
-        new_run.font.color.rgb = text_color_default
-
-    shape._element.getparent().remove(shape._element)
+    tf.word_wrap = True
+    run.font.size = Pt(size_pt)
 
 
 def _set_run_text(slide, target: dict, value: str) -> None:
