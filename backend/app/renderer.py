@@ -16,6 +16,7 @@ from . import blob_store
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 
@@ -702,6 +703,72 @@ def _largest_picture_blob(slide):
     return best.image.blob if best is not None else None
 
 
+def _cover_text_overlays(slide) -> list[dict]:
+    """Some styles' cover/closing slides aren't a single flat picture -- they have a live
+    text box (e.g. the client's name) sitting on top of the background art, which is why
+    that slide's picture alone doesn't carry it. render_docx/render_pdf_native only ever
+    extracted the picture, so on those styles the client's name (or other cover text)
+    silently never made it into the Word/PDF export's cover page. Called against the
+    already-filled deck (not a blank template), so any text returned here is real,
+    already-substituted content, not placeholder text.
+
+    Only returns text shapes stacked *above* the largest picture in z-order. A shape
+    listed *before* the picture in the XML is drawn first and then fully covered by that
+    opaque picture in the actual design -- i.e. genuinely invisible there on purpose (seen
+    with progressive-ux-agreement's closing slide, which has a leftover "YOU" text box
+    sitting under its "Thank You" background art). Overlaying it anyway would add a
+    duplicate, mismatched copy of text the design never actually shows.
+    """
+    shapes = list(slide.shapes)
+    picture_indexes = [i for i, sh in enumerate(shapes) if sh.shape_type == 13]
+    topmost_picture_index = max(picture_indexes) if picture_indexes else -1
+
+    overlays = []
+    for i, sh in enumerate(shapes):
+        if sh.shape_type == 13 or not sh.has_text_frame or i < topmost_picture_index:
+            continue
+        # python-pptx joins multiple paragraphs/soft line-breaks with "\n"/"\x0b" -- drawn
+        # literally via drawCentredString (a single-line call) that shows as a missing-glyph
+        # box, not an actual line break, so collapse them to spaces for this one-line overlay.
+        text = " ".join(sh.text_frame.text.replace("\x0b", "\n").split("\n")).strip()
+        text = " ".join(text.split())
+        if not text or not sh.width or not sh.height:
+            continue
+        run = None
+        for para in sh.text_frame.paragraphs:
+            if para.runs:
+                run = para.runs[0]
+                break
+        size_pt = run.font.size.pt if run and run.font.size else 24
+        bold = bool(run.font.bold) if run else False
+        color_hex = None
+        try:
+            if run and run.font.color and run.font.color.type is not None:
+                # An explicit RGB value resolves directly; a *theme* color (very common for
+                # this kind of reversed/knockout text over a photo background -- e.g.
+                # schemeClr "bg1") has no .rgb to read, so approximate from the scheme name:
+                # background-slot colors read as white, text-slot colors as black. Wrong for
+                # an unusual theme, but far closer than defaulting to black on every cover.
+                if run.font.color.type == MSO_THEME_COLOR.NOT_THEME_COLOR:
+                    color_hex = str(run.font.color.rgb)
+                else:
+                    theme_name = str(run.font.color.theme_color)
+                    color_hex = "FFFFFF" if "BACKGROUND" in theme_name else "000000"
+        except AttributeError:
+            color_hex = None
+        overlays.append({
+            "text": text,
+            "left_in": sh.left / 914400,
+            "top_in": sh.top / 914400,
+            "width_in": sh.width / 914400,
+            "height_in": sh.height / 914400,
+            "size_pt": size_pt,
+            "bold": bold,
+            "color_hex": color_hex,
+        })
+    return overlays
+
+
 def render_docx(
     company: str,
     service: str,
@@ -969,9 +1036,21 @@ def render_pdf_native(
     companies = load_companies()
     company_data = companies[company]
 
-    src_prs = Presentation(SHARED_DIR / style / "template.pptx")
-    cover_blob = _largest_picture_blob(src_prs.slides[0])
-    closing_blob = _largest_picture_blob(src_prs.slides[-1])
+    # Some styles' cover/closing slides carry a live text box over the background art (the
+    # client's name, most often) rather than having everything baked into one flat picture
+    # -- extracting from a blank template would only ever get the picture and silently drop
+    # that text, so this renders the real, already-filled deck first and reads the cover/
+    # closing slides from that instead.
+    filled_pptx_path = render(company, service, style, field_values, table_values, section_values, table_columns)
+    try:
+        filled_prs = Presentation(filled_pptx_path)
+        cover_slide, closing_slide = filled_prs.slides[0], filled_prs.slides[-1]
+        cover_blob = _largest_picture_blob(cover_slide)
+        closing_blob = _largest_picture_blob(closing_slide)
+        cover_overlays = _cover_text_overlays(cover_slide)
+        closing_overlays = _cover_text_overlays(closing_slide)
+    finally:
+        filled_pptx_path.unlink(missing_ok=True)
 
     page_w, page_h = letter
     raw_client = field_values.get("client_name", "proposal").strip() or "proposal"
@@ -994,7 +1073,7 @@ def render_pdf_native(
         "label": ParagraphStyle("label", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=INK, spaceAfter=4),
     }
 
-    def full_bleed_pdf_page(blob) -> bytes:
+    def full_bleed_pdf_page(blob, overlays=None) -> bytes:
         """A single full-bleed image page, built with a raw canvas (no Platypus frames
         involved at all) -- kept as its own tiny PDF and merged in with pypdf afterwards.
         Mixing a zero-margin full-bleed page and a normally-margined content flow in one
@@ -1005,6 +1084,13 @@ def render_pdf_native(
         buf = io.BytesIO()
         c = pdfcanvas.Canvas(buf, pagesize=letter)
         c.drawImage(ImageReader(io.BytesIO(blob)), 0, 0, width=page_w, height=page_h)
+        for ov in (overlays or []):
+            font = "Helvetica-Bold" if ov["bold"] else "Helvetica"
+            c.setFont(font, ov["size_pt"])
+            c.setFillColor(colors.HexColor(f"#{ov['color_hex']}") if ov["color_hex"] else colors.black)
+            cx = (ov["left_in"] + ov["width_in"] / 2) * inch
+            cy = page_h - (ov["top_in"] + ov["height_in"] / 2) * inch - ov["size_pt"] * 0.18
+            c.drawCentredString(cx, cy, ov["text"])
         c.showPage()
         c.save()
         return buf.getvalue()
@@ -1127,10 +1213,10 @@ def render_pdf_native(
 
     writer = PdfWriter()
     if cover_blob:
-        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(cover_blob))))
+        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(cover_blob, cover_overlays))))
     writer.append(PdfReader(content_buf))
     if closing_blob:
-        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(closing_blob))))
+        writer.append(PdfReader(io.BytesIO(full_bleed_pdf_page(closing_blob, closing_overlays))))
     with open(out_path, "wb") as f:
         writer.write(f)
     return out_path

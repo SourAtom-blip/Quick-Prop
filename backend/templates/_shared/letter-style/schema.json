@@ -31,6 +31,7 @@
     "bottom_limit_in": 9.2,
     "gap_in": 0.3,
     "core_blocks": [
+      {"body_key": "intro_body"},
       {"fixed_heading": "Package Details", "body_key": "package_details"},
       {"body_key": "closing_message"}
     ],
