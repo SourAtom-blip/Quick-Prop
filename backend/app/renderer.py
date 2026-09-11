@@ -1289,16 +1289,13 @@ def render_pdf_native(
                     else:
                         current = candidate
                 lines.append({**ln, "text": current})
-            # A single short line (a name badge, a title) reads best vertically centered in
-            # its shape; several stacked lines (a Name/Date/Phone/Email block) instead need
-            # to start from the top and flow down, or they'd all be centered on top of each
-            # other -- exactly the illegible pile-up this replaced.
+            # PowerPoint's real default (when a text box doesn't explicitly set an anchor,
+            # which is the case for every shape seen here) is top-anchored, not vertically
+            # centered -- centering a single short line instead was closer for a name badge
+            # sitting inside a pill-shaped box, but wrong for an ordinary top-anchored
+            # heading like "SIGN-OFF", which it crept upward into the logo above it.
             line_height_pt = max(ln["size_pt"] for ln in lines) * 1.25
-            block_height_pt = line_height_pt * len(lines)
-            if len(lines) == 1:
-                top_y = page_h - (ov["top_in"] + ov["height_in"] / 2) * inch + block_height_pt / 2 * 0.72
-            else:
-                top_y = page_h - ov["top_in"] * inch - line_height_pt * 0.8
+            top_y = page_h - ov["top_in"] * inch - line_height_pt * 0.8
             for idx, ln in enumerate(lines):
                 font = "Helvetica-Bold" if ln["bold"] else "Helvetica"
                 c.setFont(font, ln["size_pt"])
