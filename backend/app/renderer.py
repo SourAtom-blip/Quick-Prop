@@ -713,7 +713,7 @@ def _mean_brightness(image_blob: bytes) -> float:
     return sum(pixels) / len(pixels)
 
 
-def _lightened_to(image_blob: bytes, target_brightness: float = 242) -> bytes:
+def _lightened_to(image_blob: bytes, target_brightness: float = 250) -> bytes:
     """Blends the image toward white just enough to make dark body text sit legibly on top
     of it, rather than dropping a heavily-styled dark background entirely -- some branding
     (the logo, the texture) still comes through, just faded, instead of a plain blank page."""
@@ -722,7 +722,7 @@ def _lightened_to(image_blob: bytes, target_brightness: float = 242) -> bytes:
     img = Image.open(io.BytesIO(image_blob)).convert("RGB")
     current = _mean_brightness(image_blob)
     # alpha = how much white to blend in; solving current*(1-a) + 255*a = target for a.
-    alpha = max(0.0, min(0.97, (target_brightness - current) / (255 - current))) if current < 255 else 0.0
+    alpha = max(0.0, min(0.985, (target_brightness - current) / (255 - current))) if current < 255 else 0.0
     white = Image.new("RGB", img.size, (255, 255, 255))
     blended = Image.blend(img, white, alpha)
     out = io.BytesIO()
