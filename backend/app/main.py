@@ -261,7 +261,8 @@ def generate(company: str, service: str, style: str, req: GenerateRequest):
             # LibreOffice isn't installable on most free/shared hosts (PythonAnywhere, plain
             # shared cPanel), so this pure-Python path is what makes PDF export portable.
             result_path = renderer.render_pdf_native(
-                company, service, style, req.values, req.tables, req.sections, req.table_columns
+                company, service, style, req.values, req.tables, req.sections, req.table_columns,
+                req.rep_signature_id, req.client_signature_id,
             )
         else:
             result_path = renderer.render(

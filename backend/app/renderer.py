@@ -1088,6 +1088,8 @@ def render_pdf_native(
     table_values: dict | None = None,
     section_values: dict | None = None,
     table_columns: dict | None = None,
+    rep_signature_id: str | None = None,
+    client_signature_id: str | None = None,
 ) -> Path:
     """Builds the proposal PDF directly with reportlab instead of converting the pptx via
     LibreOffice. LibreOffice isn't installable on most free/shared hosts (PythonAnywhere,
@@ -1136,7 +1138,10 @@ def render_pdf_native(
     # -- extracting from a blank template would only ever get the picture and silently drop
     # that text, so this renders the real, already-filled deck first and reads the cover/
     # closing slides from that instead.
-    filled_pptx_path = render(company, service, style, field_values, table_values, section_values, table_columns)
+    filled_pptx_path = render(
+        company, service, style, field_values, table_values, section_values, table_columns,
+        rep_signature_id, client_signature_id,
+    )
     try:
         filled_prs = Presentation(filled_pptx_path)
         cover_slide, closing_slide = filled_prs.slides[0], filled_prs.slides[-1]
