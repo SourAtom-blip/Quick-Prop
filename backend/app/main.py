@@ -117,8 +117,8 @@ async def upload_signature(company: str, file: UploadFile):
     _validate_is_real_image(raw)
     if blob_store.BLOB_ENABLED:
         for old in ("png", "jpg", "jpeg"):
-            blob_store.blob_delete(f"signatures/{company}.{old}")
-        blob_store.blob_put(f"signatures/{company}{ext}", raw)
+            await blob_store.blob_delete_async(f"signatures/{company}.{old}")
+        await blob_store.blob_put_async(f"signatures/{company}{ext}", raw)
         return {"ok": True, "path": f"signatures/{company}{ext}"}
     for old in ("png", "jpg", "jpeg"):
         old_path = renderer.SIGNATURES_DIR / f"{company}.{old}"
@@ -141,7 +141,7 @@ async def upload_temp_signature(file: UploadFile):
     _validate_is_real_image(raw)
     sig_id = uuid.uuid4().hex
     if blob_store.BLOB_ENABLED:
-        blob_store.blob_put(f"temp_signatures/{sig_id}{ext}", raw)
+        await blob_store.blob_put_async(f"temp_signatures/{sig_id}{ext}", raw)
         return {"id": sig_id}
     dest = renderer.TEMP_SIGNATURES_DIR / f"{sig_id}{ext}"
     dest.write_bytes(raw)
