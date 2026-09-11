@@ -4,11 +4,5 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "backend/app/main.py" }
-  ],
-  "functions": {
-    "backend/app/main.py": {
-      "memory": 3009,
-      "maxDuration": 60
-    }
-  }
+  ]
 }

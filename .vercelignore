@@ -1,0 +1,8 @@
+*.pdf
+Blank Templates/
+Example Templates/
+backend/output/
+backend/.loadtest_progress.json
+backend/*.log
+frontend/*.log
+backend/data/signatures/*

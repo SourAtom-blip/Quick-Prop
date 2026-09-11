@@ -19,3 +19,6 @@ backend/*.log
 frontend/*.log
 backend/data/signatures/*
 !backend/data/signatures/.gitkeep
+
+.vercel
+.env*

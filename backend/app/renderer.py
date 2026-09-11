@@ -706,11 +706,31 @@ def _largest_picture_blob(slide):
 
 def _mean_brightness(image_blob: bytes) -> float:
     """0 (black) - 255 (white) average brightness, used to decide whether an image is safe
-    to use as a full-page background behind dark text."""
+    to use as a full-page background behind dark text. Composites onto white first -- these
+    backgrounds are almost always mostly-transparent PNGs (logo/texture over empty space),
+    and naively converting straight to grayscale reads each transparent pixel's *underlying*
+    RGB value (often black) regardless of its alpha, making an actually-mostly-white image
+    measure as if it were nearly black."""
     from PIL import Image
-    img = Image.open(io.BytesIO(image_blob)).convert("L").resize((40, 40))
-    pixels = list(img.getdata())
+    img = Image.open(io.BytesIO(image_blob)).convert("RGBA").resize((40, 40))
+    white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    composited = Image.alpha_composite(white_bg, img).convert("L")
+    pixels = list(composited.getdata())
     return sum(pixels) / len(pixels)
+
+
+def _flatten_on_white(image_blob: bytes) -> bytes:
+    """Composites a (typically mostly-transparent) PNG onto a solid white backdrop and
+    returns a flattened, opaque PNG. Used before drawing something as a full-page background
+    via a plain drawImage call with no mask -- reportlab draws an untouched transparent
+    pixel's underlying color as-is (often black) rather than as white/see-through."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(image_blob)).convert("RGBA")
+    white_bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    flattened = Image.alpha_composite(white_bg, img).convert("RGB")
+    out = io.BytesIO()
+    flattened.save(out, format="PNG")
+    return out.getvalue()
 
 
 def _lightened_to(image_blob: bytes, target_brightness: float = 250) -> bytes:
@@ -719,7 +739,12 @@ def _lightened_to(image_blob: bytes, target_brightness: float = 250) -> bytes:
     (the logo, the texture) still comes through, just faded, instead of a plain blank page."""
     from PIL import Image
 
-    img = Image.open(io.BytesIO(image_blob)).convert("RGB")
+    # Composite onto white first -- these are typically mostly-transparent PNGs, and
+    # blending straight from RGB (ignoring alpha) would treat transparent pixels' often-black
+    # underlying color as real, opaque black content to fade, when it isn't visible at all.
+    raw = Image.open(io.BytesIO(image_blob)).convert("RGBA")
+    white_full = Image.new("RGBA", raw.size, (255, 255, 255, 255))
+    img = Image.alpha_composite(white_full, raw).convert("RGB")
     current = _mean_brightness(image_blob)
     # alpha = how much white to blend in; solving current*(1-a) + 255*a = target for a.
     alpha = max(0.0, min(0.985, (target_brightness - current) / (255 - current))) if current < 255 else 0.0
@@ -1131,17 +1156,38 @@ def render_pdf_native(
         # though they carry real, filled-in content of their own. Any such slide is rendered
         # the same way as the cover/closing (its art + its live text), in its original order.
         extra_slide_pages = []
+        content_overlay_images = []
         if flow_cfg_for_bg:
             first_slide_idx = flow_cfg_for_bg["first_slide"] - 1
             if 0 <= first_slide_idx < len(filled_prs.slides):
-                candidate_blob = _largest_picture_blob(filled_prs.slides[first_slide_idx])
-                # Not every style's `first_slide` is a light, subtle repeating pattern --
-                # some are a heavily-styled dark section slide. Rather than drop it entirely
-                # (a plain white page, no branding at all), it gets lightened toward white
-                # until the dark body text sitting on top of it stays legible -- the logo
-                # and texture still show through, just faded.
-                if candidate_blob:
-                    content_bg_blob = candidate_blob if _mean_brightness(candidate_blob) >= 180 else _lightened_to(candidate_blob)
+                first_slide = filled_prs.slides[first_slide_idx]
+                slide_area = filled_prs.slide_width * filled_prs.slide_height
+                pics = [sh for sh in first_slide.shapes if sh.shape_type == 13]
+                biggest = max(pics, key=lambda sh: (sh.width or 0) * (sh.height or 0), default=None)
+                is_full_bleed = biggest and slide_area and (biggest.width or 0) * (biggest.height or 0) >= slide_area * 0.85
+                if is_full_bleed:
+                    candidate_blob = biggest.image.blob
+                    # Not every style's `first_slide` is a light, subtle repeating pattern --
+                    # some are a heavily-styled dark section slide. Rather than drop it
+                    # entirely (a plain white page, no branding at all), it gets lightened
+                    # toward white until the dark body text on top stays legible -- the logo
+                    # and texture still show through, just faded.
+                    content_bg_blob = _flatten_on_white(candidate_blob) if _mean_brightness(candidate_blob) >= 180 else _lightened_to(candidate_blob)
+                elif pics:
+                    # No single picture covers the whole slide -- e.g. just a header banner
+                    # strip plus a separate watermark logo positioned lower down, each on its
+                    # own. Forcing whichever is biggest to fill the entire page (as the
+                    # full-bleed case above does) would grotesquely stretch and reposition it.
+                    # Each picture is instead drawn later at its own real position/size.
+                    for sh in pics:
+                        blob = sh.image.blob
+                        if "watermark" in (sh.name or "").lower():
+                            blob = _lightened_to(blob, target_brightness=245)
+                        content_overlay_images.append({
+                            "left_in": sh.left / 914400, "top_in": sh.top / 914400,
+                            "width_in": sh.width / 914400, "height_in": sh.height / 914400,
+                            "blob": blob,
+                        })
             already_shown_text = {
                 str(v).strip() for v in list(field_values.values()) + [company_data.get("name", "")]
                 if isinstance(v, str) and v.strip()
@@ -1379,6 +1425,17 @@ def render_pdf_native(
             c.setFont("Helvetica", 8)
             c.setFillColor(MUTED)
             c.drawRightString(page_w - margin, 0.3 * inch, f"Page {doc_.page}")
+        elif content_overlay_images:
+            for ov in content_overlay_images:
+                c.drawImage(
+                    ImageReader(io.BytesIO(ov["blob"])),
+                    ov["left_in"] * inch, page_h - (ov["top_in"] + ov["height_in"]) * inch,
+                    width=ov["width_in"] * inch, height=ov["height_in"] * inch,
+                    mask="auto",
+                )
+            c.setFont("Helvetica", 8)
+            c.setFillColor(MUTED)
+            c.drawRightString(page_w - margin, 0.3 * inch, f"Page {doc_.page}")
         else:
             c.setStrokeColor(colors.HexColor("#DDDDDD"))
             c.setLineWidth(0.5)
@@ -1391,9 +1448,17 @@ def render_pdf_native(
 
     content_buf = io.BytesIO()
     margin = 0.7 * inch
+    # A header banner positioned near the top of the page (drawn in draw_footer above) would
+    # otherwise collide with this page's own title block, which always starts at the normal
+    # top margin with no awareness of that banner -- push the title down below it instead.
+    header_clearance_in = max(
+        (ov["top_in"] + ov["height_in"] for ov in content_overlay_images if ov["top_in"] < 1),
+        default=0,
+    )
+    top_margin = max(margin, (header_clearance_in + 0.25) * inch) if header_clearance_in else margin
     content_doc = SimpleDocTemplate(
         content_buf, pagesize=letter,
-        leftMargin=margin, rightMargin=margin, topMargin=margin, bottomMargin=margin,
+        leftMargin=margin, rightMargin=margin, topMargin=top_margin, bottomMargin=margin,
     )
     content_doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
     content_buf.seek(0)
