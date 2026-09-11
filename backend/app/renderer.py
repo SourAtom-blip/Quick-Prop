@@ -785,13 +785,21 @@ def _cover_text_overlays(slide, slide_w_emu=None, slide_h_emu=None) -> list[dict
         if i < topmost_picture_index or not sh.width or not sh.height:
             continue
         if sh.shape_type == 13:
-            # A second picture stacked on top of the background -- most often an actual
-            # embedded signature image -- needs to be drawn too, not just skipped as if it
-            # were more background art.
+            # A second picture stacked on top of the background is either an actual
+            # embedded signature (meant to be read at full strength) or a decorative
+            # watermark logo -- PowerPoint renders the latter at reduced transparency as
+            # part of the slide's own picture effects, which python-pptx doesn't expose, so
+            # it would otherwise come out as a bold, full-opacity image instead of the faded
+            # watermark the design intends. Templates name these shapes "Watermark" --
+            # more reliable than guessing from size, which also matches a full-width header
+            # banner that's meant to stay solid.
+            blob = sh.image.blob
+            if "watermark" in (sh.name or "").lower():
+                blob = _lightened_to(blob, target_brightness=245)
             overlays.append({
                 "left_in": sh.left / 914400, "top_in": sh.top / 914400,
                 "width_in": sh.width / 914400, "height_in": sh.height / 914400,
-                "image_blob": sh.image.blob,
+                "image_blob": blob,
             })
             continue
         if not sh.has_text_frame:
